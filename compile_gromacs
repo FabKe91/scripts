@@ -1,0 +1,163 @@
+#!/bin/bash
+
+# Author: Fabian Keller
+# Date: Jan 2018
+# Description: Script to compile gromacs with common flags set for compilation.
+
+
+########################################################################################################################
+# Some notes:
+#   - It is always better to compile gromacs on the hardware you want to use
+#   - One mostly doesn't need to tell gromacs which libraries to use (most probably gromacs finds the optimal ones)
+#   - When using non default binary suffices (like gmx_mysuffix) and library suffix one can have multiple builds of gromacs
+#     optimized for different hardware and compatibility
+#
+# Possible compiler flags: (version 2018+)
+#    -DCMAKE_C_COMPILER=xxx equal to the name of the C99 Compiler you wish to use (or the environment variable CC)
+#    -DCMAKE_CXX_COMPILER=xxx equal to the name of the C++98 compiler you wish to use (or the environment variable CXX)
+#    -DGMX_MPI=on to build using MPI support (generally good to combine with building only mdrun)
+#    -DGMX_GPU=on to build using nvcc to run using NVIDIA CUDA GPU acceleration or an OpenCL GPU
+#    -DGMX_USE_OPENCL=on to build with OpenCL support enabled. GMX_GPU must also be set.
+#    -DGMX_SIMD=xxx to specify the level of SIMD support of the node on which GROMACS will run
+#    -DGMX_BUILD_MDRUN_ONLY=on for building only mdrun, e.g. for compute cluster back-end nodes
+#    -DGMX_DOUBLE=on to build GROMACS in double precision (slower, and not normally useful)
+#    -DCMAKE_PREFIX_PATH=xxx to add a non-standard location for CMake to search for libraries, headers or programs
+#    -DCMAKE_INSTALL_PREFIX=xxx to install GROMACS to a non-standard location (default /usr/local/gromacs)
+#    -DBUILD_SHARED_LIBS=off to turn off the building of shared libraries to help with static linking
+#    -DGMX_FFT_LIBRARY=xxx to select whether to use fftw, mkl or fftpack libraries for FFT support
+#    -DCMAKE_BUILD_TYPE=Debug to build GROMACS in debug mode
+#    
+# For more info see: http://manual.gromacs.org/documentation/2018/install-guide/index.html
+#
+########################################################################################################################
+
+
+if [[ $# -lt 1 ]]; then
+    echo "Need input parameter: <gmx src folder name> <opt: binary suffix string"
+    echo "e.g. run like ./compile_gromacs gromacs-2016.1"
+    exit
+fi
+
+gmxvers=$1
+bin_suff=$2
+
+if [ ! -e "$gmxvers" ]; then
+    echo folder \"$gmxvers\" not existing.
+    exit
+fi
+
+
+cd $gmxvers
+export INSTALL_DIR=$(pwd)
+rm -rf build
+mkdir -p build
+cd build
+
+
+PS3="Choose compiler flag set:"
+select compile_opt in COMPATIBILITY QUICKnDIRTY GPU MPI GPU_MPI INFO
+
+do
+if [ "$compile_opt" != "INFO" ]; then
+    echo "Building with build options $compile_opt"
+fi
+break
+done
+
+case $compile_opt in
+  COMPATIBILITY )
+    echo "NOTE: This build is designed to be run on all kinds of hardware and will be slower. "
+    cmake ..\
+            -DGMX_DEFAULT_SUFFIX=OFF\
+			-DGMX_BINARY_SUFFIX=$bin_suff\
+            -DGMX_LIBS_SUFFIX=$bin_suff\
+            -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}\
+            -DGMX_SIMD=SSE4.1\
+            -DGMX_OPENMP=ON\
+            -DGMX_GPU=OFF\
+            -DGMX_MPI=OFF\
+            -DGMX_USE_RDTSCP=OFF\
+    
+    make -j 8
+    make install
+   ;;
+   
+  QUICKnDIRTY )
+    echo "NOTE: Let Gromacs choose all relevant flags. Works well if compilation is done on hardware where simulations are run on."
+    cmake ..\
+            -DGMX_DEFAULT_SUFFIX=OFF\
+			-DGMX_BINARY_SUFFIX=$bin_suff\
+            -DGMX_LIBS_SUFFIX=$bin_suff\
+            -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}\
+
+    make -j 8
+    make install
+   ;;
+
+  GPU )
+    echo "NOTE: For max performance compile on hardware you wish to run the simulations on."
+    cmake ..\
+            -DGMX_DEFAULT_SUFFIX=OFF\
+			-DGMX_BINARY_SUFFIX=$bin_suff\
+            -DGMX_LIBS_SUFFIX=$bin_suff\
+            -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}\
+            -DGMX_OPENMP=ON\
+            -DGMX_GPU=ON\
+            -DGMX_MPI=OFF\
+            -DGMX_USE_RDTSCP=ON\
+            -DGMX_BUILD_MDRUN_ONLY=ON\
+    
+    make -j 8
+    make install
+    ;;
+
+  MPI )
+    echo "NOTE: For max performance compile on hardware you wish to run the simulations on."
+    cmake ..\
+            -DGMX_DEFAULT_SUFFIX=OFF\
+			-DGMX_BINARY_SUFFIX=$bin_suff\
+            -DGMX_LIBS_SUFFIX=$bin_suff\
+            -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}\
+            -DGMX_OPENMP=ON\
+            -DGMX_GPU=OFF\
+            -DGMX_MPI=ON\
+            -DGMX_USE_RDTSCP=ON\
+            -DGMX_BUILD_MDRUN_ONLY=ON\
+    
+    make -j 8
+    make install
+    ;;
+
+  GPU_MPI )
+    echo "NOTE: For max performance compile on hardware you wish to run the simulations on."
+    cmake ..\
+            -DGMX_DEFAULT_SUFFIX=OFF\
+			-DGMX_BINARY_SUFFIX=$bin_suff\
+            -DGMX_LIBS_SUFFIX=$bin_suff\
+            -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}\
+            -DGMX_OPENMP=ON\
+            -DGMX_GPU=ON\
+            -DGMX_MPI=ON\
+            -DGMX_USE_RDTSCP=ON\
+            -DGMX_BUILD_MDRUN_ONLY=ON\
+    
+    make -j 8
+    make install
+    ;;
+
+  INFO )
+    echo -e "\nINFO:\n"
+    echo -e "COMPATIBILITY:\tBuild for maximum compatibility. Will build complete set of gromacs tools to be run on all kinds of hardware. Will probably be slower."
+    echo -e "QUICKnDIRTY:\tLet gromacs decide what's good for you and if compiled on hardware you will use gromacs knows very well..."
+    echo -e "GPU:\t\tBuild with GPU support. Will build mdrun only. To get maximum performance compile on hardware you want to run simulations on."
+    echo -e "MPI:\t\tBuild with external MPI library (must be installed). Will build mdrun only. To get maximum performance compile on hardware you want to run simulations on. Internal threadMPI library is faster, but cannot be used across nodes."
+    echo -e "GPU_MPI:\tCombines GPU and MPI build options."
+
+    ;;
+
+  * ) 
+    echo "Invalid input value choose: COMPATIBILITY GPU MPI GPU_MPI"
+    echo "To get info on build options choose INFO"
+
+esac
+    

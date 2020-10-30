@@ -1,0 +1,37 @@
+#!/bin/bash
+
+echo "This script is deprecated. Use start_jobs_gpus instead"
+exit
+
+if [ $# -ne 4 ]; then
+    echo "Too few values: <systemname> <temperature> <jobcount> <new sequence?(0|1)>"
+    exit
+fi
+syst=$1
+temp=$2
+jobcount=$3
+new_job_sequence=$4
+
+echo "Submitting ${jobcount} jobs for ${syst}_${temp}"
+cd ${syst}_${temp} 
+pre=$(ls ${syst}_${temp}.cpt.* | tail -n 1); pre2=${pre##*.}; ((jobcounter=$pre2+1))  ### Get last cpt-file number
+    echo "Starting sequence at $jobcounter"
+    if [ ${new_job_sequence} -eq 1 ]; then
+        sbatch -J ${syst}_${temp}_${jobcounter} -o ${syst}_${temp}_${jobcounter}.out submit_production.sh > jobid
+        (( jobcounter += 1 ))
+    elif [ ${new_job_sequence} -eq 0 ]; then
+        echo ""
+    else
+        echo "Invalid value for job sequence, either state 0 or 1"
+        exit
+    fi
+
+
+    for (( i=${jobcounter}; i<=jobcount; i=i+1 )); do
+        jobid=$(cat jobid | cut -d" " -f4)
+        echo "Starting job $i with dependency on $jobid"
+        sbatch -J ${syst}_${temp}_${i} -o ${syst}_${temp}_${i}.out --dependency=afterany:${jobid} submit_production.sh > jobid
+
+    done
+cd ..
+
