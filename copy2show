@@ -1,0 +1,13 @@
+#!/bin/bash
+# Use like ./copyfile <file1> <file2> <*.txt>
+
+if [[ $# -lt 1 ]]; then
+echo "Specify files to be copied."
+exit
+fi
+
+files=$*
+for file in "${files[@]}"; do
+    rsync -avPe ssh $file akheu08.uni-muenster.de:ownCloud/current/
+done
+
