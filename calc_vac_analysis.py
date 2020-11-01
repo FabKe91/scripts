@@ -84,21 +84,24 @@ def calc_distance():
 
     if not isinstance(mda.AtomGroup, list):
         head_atms = mda.AtomGroup(head_atms)
-
+    
     with open(OUTPUTFILENAME, "w") as outf:
         outf.write("{: <15}{: <10}{: <10}{: <20}\n".format("time", "resid", "chain", "dist"))
         for ts in u.trajectory:
             LOGGER.info("at time %s", ts.time)
             outp_inf = []
+            #distances = distance_array(np.array([head.position for head in head_atms]), np.array([tail.position for tail in tail_atms]))
             for head, tail in zip(head_atms, tail_atms):
-                distances = distance_array(head.position, tail.position)
-                LOGGER.debug("distances:\n%s", distances)
-                for i, d in enumerate(distances):
-                    residue = head_atms[i]
-                    for chainid, dist in enumerate(d):
-                        outpline = "{: <15}{: <10}{: <10}{: <20}\n"\
-                            .format(ts.time, residue.resid, chainid, dist )
-                        outp_inf.append(outpline)
+                #print("HEAD", head)
+                distances = distance_array(head.position, tail.position)[0]
+                
+                #LOGGER.debug("distances:\n%s", distances)
+                residue = head.residue
+                #LOGGER.info("at residue %s", residue)
+                for chainid, dist in enumerate(distances):
+                    outpline = "{: <15}{: <10}{: <10}{: <20}\n"\
+                        .format(ts.time, residue.resid, chainid, dist )
+                    outp_inf.append(outpline)
             for line in outp_inf:
                 outf.write(line)
 
