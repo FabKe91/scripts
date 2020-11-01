@@ -83,16 +83,22 @@ def rotation_matrix(axis, theta):
 
 def get_rand_axis(lipvec):
     ''' '''
-    gammarange = np.arange([-1, 1, 0.05])
+    xaxis = np.array([1,0,0])
+    zaxis = np.array([0,0,1])
+    gammarange = np.arange(-1, 1+0.01, 0.01)
     gammaweights = None
-    thetarange = np.arange([0, 1, 0.05])
-    thetaweights = None
-    cosgamma = random.choices(gammarange, weights=gammaweights)
-    costheta = random.choices(thetarange, weights=thetaweights)
+    thetarange = np.arange(0, 1+0.01, 0.01)
+    thetaweights = [166, 766, 1102, 817, 962, 1018, 971, 1074, 1046, 1074, 1084, 1171, 1264, 1358, 1341, 1373, 1457, 1523, 1564, 1727, 1763, 1807, 1962, 1978, 2103, 2298, 2370, 2500, 2696, 2848, 3035, 3121, 3261, 3482, 3636, 3925, 4092, 4269, 4510, 4715, 5004, 5235, 5501, 5834, 5946, 6288, 6688, 6866, 7289, 7621, 8082, 8262, 8940, 9265, 9452, 9978, 10250, 10933, 11148, 11663, 12201, 12700, 13127, 13848, 14205, 14746, 15441, 16102, 16507, 17178, 17810, 18083, 18868, 19506, 20259, 20744, 21318, 22106, 22599, 23679, 23937, 25042, 25159, 26299, 26746, 27373, 27962, 28528, 28980, 29286, 30208, 30552, 30954, 31316, 31871, 32218, 32283, 33081, 33232, 33601, 33767]
+    cosgamma = random.choices(gammarange, weights=gammaweights)[0]
+    costheta = random.choices(thetarange, weights=thetaweights)[0]
     theta = np.arccos(costheta)
     gamma = np.arccos(cosgamma)
-    vec = np.dot(rotation_matrix(np.array([0,0,1]), theta), lipvec)
-    vec = np.dot(rotation_matrix(np.array([1,0,0]), gamma), vec)
+    #print("costheta, theta", costheta, theta)
+    #print("gamma theta", gamma, theta)
+    vec = np.dot(rotation_matrix(xaxis, theta), lipvec)  # rotation around x (z tilt)
+    #print(vec)
+    vec = np.dot(rotation_matrix(zaxis, gamma), vec) # rotation around z (xy plane)
+    #print(vec)
     return vec
 
 
@@ -147,8 +153,8 @@ def create_cc_orderfiles():
     with open(OUTPUTFILENAME, "w") as scdfile:
 
         #### Print header files ####
-        print("{: <12}{: <15}"\
-                .format("time", "S"),
+        print("{: <12}{: <10}{: <15}"\
+                .format("time", "axndx", "S"),
             file=scdfile)
 
         tailatms = SCD_TAIL_ATOMS_OF[LIPID[:2]]
@@ -171,12 +177,13 @@ def create_cc_orderfiles():
                 positions.append([atm.position for atm in atms])
 
             glycvec = glycatms.positions[0] - glycatms.positions[1]
-            refaxis = get_rand_axis(glycvec)
+            for i in range(100):
+                refaxis = get_rand_axis(glycvec)
 
-            order_val, s_prof = get_cc_order(positions, ref_axis=refaxis)
+                order_val, s_prof = get_cc_order(positions, ref_axis=refaxis)
 
-            LOGGER.debug("printing to files ...")
-            ### Print everything to files ###
-            line_scd = "{: <12.2f}{: <15.8}".format(
-                    time, order_val)
-            print(line_scd, file=scdfile)
+                LOGGER.debug("printing to files ...")
+                ### Print everything to files ###
+                line_scd = "{: <12.2f}{: <10}{: <15.8}".format(
+                        time, i, order_val)
+                print(line_scd, file=scdfile)
