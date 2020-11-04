@@ -83,7 +83,7 @@ def rotation_matrix(axis, theta):
                      [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
 
 def get_rand_axis(refaxvec, vec_for_plane):
-    ''' 
+    '''
         gamma: angle to arbitrary axis in "bilayer plane"
         tilt: arbitrary normal vector of lipid
     '''
@@ -159,8 +159,8 @@ def create_cc_orderfiles():
     with open(OUTPUTFILENAME, "w") as scdfile, open("ztilt_randaxis.csv", "w") as axf:
 
         #### Print header files ####
-        print("{: <12}{: <10}{: <15}"\
-                .format("time", "axndx", "S"),
+        print("{: <12}{: <10}{: <15}{: <15}{: <15}{: <20}{: <20}{: <20}"\
+                .format("time", "axndx", "S", "proj_ch1", "proj_ch2", "ax_x", "ax_y", "ax_z"),
             file=scdfile)
 
         print("time,tilt", file=axf)
@@ -173,8 +173,14 @@ def create_cc_orderfiles():
             idmap = {id:pos for pos,id in enumerate(sn)}
             atms = sorted(atms, key=lambda atom:idmap[atom.name])
             s_atoms.append(atms)
-        glycatms_ref   = mda.AtomGroup([u.atoms.select_atoms("name P"), u.atoms.select_atoms("name C1")])
-        glycatms_plane = mda.AtomGroup([u.atoms.select_atoms("name C1"), u.atoms.select_atoms("name C3")])
+        ### from get randaxis from PC vector ###
+        #glycatms_ref   = mda.AtomGroup([u.atoms.select_atoms("name P"), u.atoms.select_atoms("name C1")])
+        #glycatms_plane = mda.AtomGroup([u.atoms.select_atoms("name C1"), u.atoms.select_atoms("name C3")])
+        ########################################
+
+        chainvec_atms1 = mda.AtomGroup([u.atoms.select_atoms("name P"), u.atoms.select_atoms("name C216")])
+        chainvec_atms2 = mda.AtomGroup([u.atoms.select_atoms("name P"), u.atoms.select_atoms("name C316")])
+
         for t in range(len_traj):
 
             time = u.trajectory[t].time
@@ -185,23 +191,40 @@ def create_cc_orderfiles():
             for atms in s_atoms:
                 positions.append([atm.position for atm in atms])
 
-            glycvecref = (glycatms_ref.positions[0] - glycatms_ref.positions[1])[0]
-            glycvecref = glycvecref / np.linalg.norm(glycvecref)
-            glycvecplane = (glycatms_plane.positions[0] - glycatms_plane.positions[1])[0]
-            glycvecplane = glycvecplane / np.linalg.norm(glycvecplane)
-            
-            for i in range(100):
-                refaxis = get_rand_axis(glycvecref, glycvecplane)
+            ### from get randaxis from PC vector ###
+            #glycvecref = (glycatms_ref.positions[0] - glycatms_ref.positions[1])[0]
+            #glycvecref = glycvecref / np.linalg.norm(glycvecref)
+            #glycvecplane = (glycatms_plane.positions[0] - glycatms_plane.positions[1])[0]
+            #glycvecplane = glycvecplane / np.linalg.norm(glycvecplane)
+            ########################################
 
-                tiltref = np.arccos(np.dot(refaxis, glycvecref)) * 180/np.pi
-                print("{},{}".format(time, tiltref), file=axf)
+            chainatmvec1 = (chainvec_atms1.positions[0] - chainvec_atms1.positions[1])[0]
+            #chainatmvec1 = chainatmvec1 / np.linalg.norm(chainatmvec1)
+            chainatmvec2 = (chainvec_atms2.positions[0] - chainvec_atms2.positions[1])[0]
+            #chainatmvec2 = chainatmvec2 / np.linalg.norm(chainatmvec2)
+
+            for i in range(1000):
+
+                #### from get randaxis from PC vector ###
+                #refaxis = get_rand_axis(glycvecref, glycvecplane)
+                #tiltref = np.arccos(np.dot(refaxis, glycvecref)) * 180/np.pi
+                #print("{},{}".format(time, tiltref), file=axf)
+                #########################################
+
+                refaxis = np.random.random_sample((3,))
+                refaxis = refaxis / np.linalg.norm(refaxis)
+
+                # projection of chainvec to new axis
+                projection_mag1 = np.dot(chainatmvec1, refaxis)
+                projection_mag2 = np.dot(chainatmvec2, refaxis)
+
 
                 order_val, s_prof = get_cc_order(positions, ref_axis=refaxis)
 
                 LOGGER.debug("printing to files ...")
                 ### Print everything to files ###
-                line_scd = "{: <12.2f}{: <10}{: <15.8}".format(
-                        time, i, order_val)
+                line_scd = "{: <12.2f}{: <10}{: <15.8}{: <15.5}{: <15.5}{: <20}{: <20}{: <20}".format(
+                        time, i, order_val, projection_mag1, projection_mag2, *refaxis)
                 print(line_scd, file=scdfile)
 
 if __name__ == '__main__':
