@@ -1,3 +1,4 @@
+#!/bin/env python3
 import logging
 import argparse
 import math
@@ -36,7 +37,7 @@ PARSER.add_argument('-s', action="store", metavar='grofile.gro', required=True,
                     help="structure")
 # optional arguments
 PARSER.add_argument('-o', action="store", metavar='outfile', nargs='?', required=False,
-                    help="output file name", default="")
+                    help="output file name", default="order.dat")
 PARSER.add_argument('-m', action="store", metavar='', nargs='?', required=False,
                     help="lipid", default="DPPC")
 # On/off flags
@@ -81,24 +82,29 @@ def rotation_matrix(axis, theta):
                      [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
                      [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
 
-def get_rand_axis(lipvec):
-    ''' '''
-    xaxis = np.array([1,0,0])
-    zaxis = np.array([0,0,1])
+def get_rand_axis(refaxvec, vec_for_plane):
+    ''' 
+        gamma: angle to arbitrary axis in "bilayer plane"
+        tilt: arbitrary normal vector of lipid
+    '''
+    perpvec = np.cross(refaxvec, vec_for_plane)
+
     gammarange = np.arange(-1, 1+0.01, 0.01)
     gammaweights = None
+
     thetarange = np.arange(0, 1+0.01, 0.01)
     thetaweights = [166, 766, 1102, 817, 962, 1018, 971, 1074, 1046, 1074, 1084, 1171, 1264, 1358, 1341, 1373, 1457, 1523, 1564, 1727, 1763, 1807, 1962, 1978, 2103, 2298, 2370, 2500, 2696, 2848, 3035, 3121, 3261, 3482, 3636, 3925, 4092, 4269, 4510, 4715, 5004, 5235, 5501, 5834, 5946, 6288, 6688, 6866, 7289, 7621, 8082, 8262, 8940, 9265, 9452, 9978, 10250, 10933, 11148, 11663, 12201, 12700, 13127, 13848, 14205, 14746, 15441, 16102, 16507, 17178, 17810, 18083, 18868, 19506, 20259, 20744, 21318, 22106, 22599, 23679, 23937, 25042, 25159, 26299, 26746, 27373, 27962, 28528, 28980, 29286, 30208, 30552, 30954, 31316, 31871, 32218, 32283, 33081, 33232, 33601, 33767]
+
     cosgamma = random.choices(gammarange, weights=gammaweights)[0]
     costheta = random.choices(thetarange, weights=thetaweights)[0]
     theta = np.arccos(costheta)
     gamma = np.arccos(cosgamma)
+
     #print("costheta, theta", costheta, theta)
     #print("gamma theta", gamma, theta)
-    vec = np.dot(rotation_matrix(xaxis, theta), lipvec)  # rotation around x (z tilt)
+    vec = np.dot(rotation_matrix(perpvec, theta), refaxvec)  # rotation around vector perpendicular to refaxis (tilt)
     #print(vec)
-    vec = np.dot(rotation_matrix(zaxis, gamma), vec) # rotation around z (xy plane)
-    #print(vec)
+    #vec = np.dot(rotation_matrix(refaxvec, gamma), vec) # rotation around refaxis (rotation around "bilayer normal")
     return vec
 
 
@@ -150,22 +156,25 @@ def create_cc_orderfiles():
     ## Gather all input data for _calc_scd_output function
     len_traj = len(u.trajectory)
 
-    with open(OUTPUTFILENAME, "w") as scdfile:
+    with open(OUTPUTFILENAME, "w") as scdfile, open("ztilt_randaxis.csv", "w") as axf:
 
         #### Print header files ####
         print("{: <12}{: <10}{: <15}"\
                 .format("time", "axndx", "S"),
             file=scdfile)
 
+        print("time,tilt", file=axf)
+
         tailatms = SCD_TAIL_ATOMS_OF[LIPID[:2]]
         s_atoms = []
         for sn in tailatms:
             atms = u.atoms.select_atoms( "name {}"\
                     .format(' '.join(sn) ) )
-            idmap = {(id,pos) for pos,id in enumerate(sn)}
+            idmap = {id:pos for pos,id in enumerate(sn)}
             atms = sorted(atms, key=lambda atom:idmap[atom.name])
             s_atoms.append(atms)
-        glycatms = mda.AtomGroup([u.atoms.select_atoms("name P"), u.atoms.select_atoms("name C1")])
+        glycatms_ref   = mda.AtomGroup([u.atoms.select_atoms("name P"), u.atoms.select_atoms("name C1")])
+        glycatms_plane = mda.AtomGroup([u.atoms.select_atoms("name C1"), u.atoms.select_atoms("name C3")])
         for t in range(len_traj):
 
             time = u.trajectory[t].time
@@ -176,9 +185,16 @@ def create_cc_orderfiles():
             for atms in s_atoms:
                 positions.append([atm.position for atm in atms])
 
-            glycvec = glycatms.positions[0] - glycatms.positions[1]
+            glycvecref = (glycatms_ref.positions[0] - glycatms_ref.positions[1])[0]
+            glycvecref = glycvecref / np.linalg.norm(glycvecref)
+            glycvecplane = (glycatms_plane.positions[0] - glycatms_plane.positions[1])[0]
+            glycvecplane = glycvecplane / np.linalg.norm(glycvecplane)
+            
             for i in range(100):
-                refaxis = get_rand_axis(glycvec)
+                refaxis = get_rand_axis(glycvecref, glycvecplane)
+
+                tiltref = np.arccos(np.dot(refaxis, glycvecref)) * 180/np.pi
+                print("{},{}".format(time, tiltref), file=axf)
 
                 order_val, s_prof = get_cc_order(positions, ref_axis=refaxis)
 
@@ -187,3 +203,6 @@ def create_cc_orderfiles():
                 line_scd = "{: <12.2f}{: <10}{: <15.8}".format(
                         time, i, order_val)
                 print(line_scd, file=scdfile)
+
+if __name__ == '__main__':
+    create_cc_orderfiles()
